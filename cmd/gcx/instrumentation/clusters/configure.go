@@ -88,9 +88,6 @@ Combining --use-defaults with any --<feat> flag is an error.`,
   # Disable node logs (RMW)
   gcx instrumentation clusters configure prod-eu --node-logs=false`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := opts.Validate(); err != nil {
-				return err
-			}
 			ctx := cmd.Context()
 			clusterName := args[0]
 			r, err := fleet.LoadClientWithStack(ctx, loader)
