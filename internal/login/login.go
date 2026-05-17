@@ -41,7 +41,12 @@ type Inputs struct {
 	// Zero means auto-pick from the default range. Useful when only specific
 	// ports are forwarded between a remote dev host and the user's browser.
 	OAuthCallbackPort int
-	Yes               bool
+
+	// OnPremCallbackPort fixes the local port for the on-prem auth callback
+	// server (default range: 54401-54499). See OAuthCallbackPort for rationale.
+	OnPremCallbackPort int
+
+	Yes bool
 	// UseCloudInstanceSelector is only used internally to mark the case in which
 	// a user explicitly left the server empty to be directed to the cloud
 	// instance selector
@@ -70,10 +75,16 @@ type Hooks struct {
 	// written to. Nil falls back to config.StandardLocation().
 	ConfigSource config.Source
 
-	// NewAuthFlow constructs the OAuth PKCE flow. Must be non-nil when
-	// UseOAuth is true; otherwise Run returns an error. Callers typically
-	// pass a factory that wraps auth.NewFlow.
+	// NewAuthFlow constructs the OAuth PKCE flow (cloud). Must be non-nil
+	// when UseOAuth is true and the target is cloud; otherwise Run returns
+	// an error. Callers typically pass a factory that wraps auth.NewFlow.
 	NewAuthFlow func(server string, opts auth.Options) AuthFlow
+
+	// NewOnPremAuthFlow constructs the on-prem browser auth flow. Must be
+	// non-nil when UseOAuth is true and the target is on-prem; otherwise
+	// Run returns an error. Callers typically pass a factory that wraps
+	// auth.NewOnPremFlow.
+	NewOnPremAuthFlow func(server string, opts auth.OnPremFlowOptions) OnPremAuthFlow
 
 	// ValidateFn overrides connectivity validation for testing.
 	// Returns the Grafana version string on success. When nil, the real
@@ -179,6 +190,14 @@ func (e *ErrNeedClarification) Error() string {
 // concrete browser-dependent type, and without depending on cmd/.
 type AuthFlow interface {
 	Run(ctx context.Context) (*auth.Result, error)
+}
+
+// OnPremAuthFlow is the interface implemented by auth.OnPremFlow (and test
+// stubs). It mirrors AuthFlow but returns the on-prem flow result, which
+// carries a service-account token (stored as APIToken) plus user/org
+// metadata rather than a cloud OAuth bearer.
+type OnPremAuthFlow interface {
+	Run(ctx context.Context) (*auth.OnPremResult, error)
 }
 
 // Run orchestrates the full login lifecycle:
@@ -387,9 +406,6 @@ func resolveGrafanaAuth(ctx context.Context, opts Options, target Target) (strin
 		method = "mtls"
 
 	case opts.UseOAuth:
-		if opts.NewAuthFlow == nil {
-			return "", nil, errors.New("OAuth requested but no auth flow factory provided")
-		}
 		// The internal/login package is UI-free (NC-001) — it never touches
 		// process streams directly. Callers that want OAuth output surfaced
 		// to the user must supply a Writer explicitly (the CLI passes
@@ -399,20 +415,50 @@ func resolveGrafanaAuth(ctx context.Context, opts Options, target Target) (strin
 		if w == nil {
 			w = io.Discard
 		}
-		flow := opts.NewAuthFlow(opts.Server, auth.Options{Writer: w, Port: opts.OAuthCallbackPort})
-		result, err := flow.Run(ctx)
-		if err != nil {
-			return "", nil, fmt.Errorf("OAuth flow failed: %w", err)
+
+		// UseOAuth means "browser login". The concrete flow depends on the
+		// resolved target: Cloud uses the assistant-app cloud OAuth,
+		// on-prem uses grafana-on-prem-auth-app.
+		if target == TargetOnPrem || target == TargetUnknown {
+			// On-prem browser flow (SA token via grafana-on-prem-auth-app).
+			if opts.NewOnPremAuthFlow == nil {
+				return "", nil, errors.New("on-prem OAuth requested but no auth flow factory provided")
+			}
+			flow := opts.NewOnPremAuthFlow(opts.Server, auth.OnPremFlowOptions{
+				Writer:        w,
+				Port:          opts.OnPremCallbackPort,
+				OrgID:         int64(opts.OrgID),
+				SkipTLSVerify: opts.TLS != nil && opts.TLS.Insecure,
+			})
+			result, err := flow.Run(ctx)
+			if err != nil {
+				return "", nil, fmt.Errorf("on-prem OAuth flow failed: %w", err)
+			}
+			grafanaCfg.APIToken = result.Token
+			grafanaCfg.AuthMethod = "oauth"
+			if grafanaCfg.OrgID == 0 && result.OrgID > 0 {
+				grafanaCfg.OrgID = result.OrgID
+			}
+		} else {
+			// Cloud OAuth flow (gat_ bearer via assistant-app).
+			if opts.NewAuthFlow == nil {
+				return "", nil, errors.New("OAuth requested but no auth flow factory provided")
+			}
+			flow := opts.NewAuthFlow(opts.Server, auth.Options{Writer: w, Port: opts.OAuthCallbackPort})
+			result, err := flow.Run(ctx)
+			if err != nil {
+				return "", nil, fmt.Errorf("OAuth flow failed: %w", err)
+			}
+			if grafanaCfg.Server == "" {
+				grafanaCfg.Server = result.InstanceEndpoint
+			}
+			grafanaCfg.OAuthToken = result.Token
+			grafanaCfg.OAuthRefreshToken = result.RefreshToken
+			grafanaCfg.OAuthTokenExpiresAt = result.ExpiresAt
+			grafanaCfg.OAuthRefreshExpiresAt = result.RefreshExpiresAt
+			grafanaCfg.ProxyEndpoint = result.APIEndpoint
+			grafanaCfg.AuthMethod = "oauth"
 		}
-		if grafanaCfg.Server == "" {
-			grafanaCfg.Server = result.InstanceEndpoint
-		}
-		grafanaCfg.OAuthToken = result.Token
-		grafanaCfg.OAuthRefreshToken = result.RefreshToken
-		grafanaCfg.OAuthTokenExpiresAt = result.ExpiresAt
-		grafanaCfg.OAuthRefreshExpiresAt = result.RefreshExpiresAt
-		grafanaCfg.ProxyEndpoint = result.APIEndpoint
-		grafanaCfg.AuthMethod = "oauth"
 		method = "oauth"
 
 	default:

@@ -48,6 +48,7 @@ type loginOpts struct {
 	Yes                 bool
 	AllowServerOverride bool
 	OAuthCallbackPort   int
+	OnPremCallbackPort  int
 	OrgID               int
 }
 
@@ -68,6 +69,7 @@ func (opts *loginOpts) setup(flags *pflag.FlagSet) {
 	flags.BoolVar(&opts.Yes, "yes", false, "Non-interactive: skip optional prompts and use defaults")
 	flags.BoolVar(&opts.AllowServerOverride, "allow-server-override", false, "Allow re-pointing an existing context at a different server URL")
 	flags.IntVar(&opts.OAuthCallbackPort, "oauth-callback-port", 0, "Fixed local port for the OAuth callback server (default: auto-pick from 54321-54399). Useful when only specific ports are forwarded between a remote host and your browser")
+	flags.IntVar(&opts.OnPremCallbackPort, "on-prem-callback-port", 0, "Fixed local port for the on-prem OAuth callback server (default: auto-pick from 54401-54499)")
 	flags.IntVar(&opts.OrgID, "org-id", 0, "Grafana organization ID (defaults to 1 for on-prem)")
 }
 
@@ -131,6 +133,8 @@ first-time setup if no current context is configured.`,
 	}
 
 	opts.setup(cmd.Flags())
+
+	cmd.AddCommand(tokenCommand())
 
 	return cmd
 }
@@ -197,21 +201,25 @@ func runLogin(cmd *cobra.Command, flags *loginOpts, args []string) error {
 
 	opts := login.Options{
 		Inputs: login.Inputs{
-			Server:            flags.Server,
-			ContextName:       contextName,
-			GrafanaToken:      flags.Token,
-			CloudToken:        flags.CloudToken,
-			CloudAPIURL:       flags.CloudAPIURL,
-			OAuthCallbackPort: flags.OAuthCallbackPort,
-			Yes:               flags.Yes,
-			OrgID:             flags.OrgID,
-			Writer:            cmd.ErrOrStderr(),
-			TLS:               existingTLS,
+			Server:             flags.Server,
+			ContextName:        contextName,
+			GrafanaToken:       flags.Token,
+			CloudToken:         flags.CloudToken,
+			CloudAPIURL:        flags.CloudAPIURL,
+			OAuthCallbackPort:  flags.OAuthCallbackPort,
+			OnPremCallbackPort: flags.OnPremCallbackPort,
+			Yes:                flags.Yes,
+			OrgID:              flags.OrgID,
+			Writer:             cmd.ErrOrStderr(),
+			TLS:                existingTLS,
 		},
 		Hooks: login.Hooks{
 			ConfigSource: flags.Config.ConfigSource(),
 			NewAuthFlow: func(server string, ao internalauth.Options) login.AuthFlow {
 				return internalauth.NewFlow(server, ao)
+			},
+			NewOnPremAuthFlow: func(server string, ao internalauth.OnPremFlowOptions) login.OnPremAuthFlow {
+				return internalauth.NewOnPremFlow(server, ao)
 			},
 		},
 		RetryState: login.RetryState{
@@ -380,30 +388,30 @@ func askGrafanaAuth(opts *login.Options, existingToken string) error {
 	}
 
 	tokenOption := huh.NewOption("Service account token (requires permissions for managing service accounts)", "token")
-	oauthOption := huh.NewOption("OAuth (browser) — recommended for cloud stacks; experimental on some configurations, fall back to a service account token if you hit issues", "oauth")
+	oauthOption := huh.NewOption("OAuth (browser) — sign in through your browser; on-prem requires the grafana-on-prem-auth-app plugin installed by an admin", "oauth")
 	mtlsOption := huh.NewOption("Client certificate (mTLS) — authenticate via TLS client cert (e.g. Teleport)", "mtls")
 
 	var options []huh.Option[string]
 	switch opts.Target {
 	case login.TargetOnPrem:
 		if hasMTLS {
-			options = []huh.Option[string]{mtlsOption, tokenOption}
+			options = []huh.Option[string]{mtlsOption, oauthOption, tokenOption}
 		} else {
-			options = []huh.Option[string]{tokenOption}
+			options = []huh.Option[string]{oauthOption, tokenOption}
 		}
 	case login.TargetCloud:
 		options = []huh.Option[string]{oauthOption, tokenOption}
 	default: // TargetUnknown
 		if hasMTLS {
-			options = []huh.Option[string]{mtlsOption, tokenOption, oauthOption}
+			options = []huh.Option[string]{mtlsOption, oauthOption, tokenOption}
 		} else {
-			options = []huh.Option[string]{tokenOption, oauthOption}
+			options = []huh.Option[string]{oauthOption, tokenOption}
 		}
 	}
 
 	// Default to the first option in the menu. For Cloud targets, mTLS is not
 	// offered so we must not default to it even when TLS certs are present.
-	authMethod := "token"
+	authMethod := "oauth"
 	if hasMTLS && opts.Target != login.TargetCloud {
 		authMethod = "mtls"
 	}

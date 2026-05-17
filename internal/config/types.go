@@ -327,7 +327,8 @@ type GrafanaConfig struct {
 	// OAuthRefreshExpiresAt is the OAuthRefreshToken expiration time in RFC3339 format.
 	OAuthRefreshExpiresAt string `json:"oauth-refresh-expires-at,omitempty" yaml:"oauth-refresh-expires-at,omitempty"`
 
-	// AuthMethod is the authentication method stored by gcx login: "oauth", "token", "basic", or "mtls".
+	// AuthMethod is the authentication method stored by gcx login:
+	// "oauth", "token", "basic", or "mtls".
 	// Empty string is valid for legacy configs; readers should call InferredAuthMethod() in that case.
 	AuthMethod string `json:"auth-method,omitempty" yaml:"auth-method,omitempty"`
 

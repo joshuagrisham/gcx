@@ -39,7 +39,10 @@ var commandAnnotations = map[string]annotation{
 	"gcx assistant investigations todos":     {Cost: "medium", Hint: "<id> -o json"},
 
 	// login
-	"gcx login": {Cost: "small"},
+	"gcx login":              {Cost: "small"},
+	"gcx login token":        {Cost: "small"},
+	"gcx login token list":   {Cost: "small"},
+	"gcx login token delete": {Cost: "small"},
 
 	// commands
 	"gcx commands": {Cost: "medium", Hint: "--flat -o json"},
