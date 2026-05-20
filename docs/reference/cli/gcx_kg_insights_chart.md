@@ -1,20 +1,26 @@
-## gcx kg insights source-metrics
+## gcx kg insights chart
 
-Get source metrics for a specific insight.
+Get chart data (series + thresholds) for a specific insight on an entity.
 
 ```
-gcx kg insights source-metrics [flags]
+gcx kg insights chart [Type--Name] [flags]
 ```
 
 ### Options
 
 ```
+      --env string          Environment scope
   -f, --file string         Input file (YAML)
       --from string         Start time (RFC3339, Unix timestamp, or relative like 'now-1h')
-  -h, --help                help for source-metrics
-      --insight-id string   Insight ID
+  -h, --help                help for chart
+      --insight string      Insight name (e.g. LatencyAverageBreach, ResourceRateAnomaly) — sets the 'alertname' label
+      --label stringArray   Extra assertion label as key=value (repeatable; e.g. asserts_resource_type=jvm:live_threads to narrow ResourceRateAnomaly to a specific resource)
+      --name string         Entity name
+      --namespace string    Namespace scope
       --since string        Duration before --to (or now); mutually exclusive with --from (e.g. 1h, 30m, 7d)
+      --site string         Site scope
       --to string           End time (RFC3339, Unix timestamp, or relative like 'now')
+      --type string         Entity type
 ```
 
 ### Options inherited from parent commands
@@ -31,5 +37,5 @@ gcx kg insights source-metrics [flags]
 
 ### SEE ALSO
 
-* [gcx kg insights](gcx_kg_insights.md)	 - Search insights and fetch their backing metrics.
+* [gcx kg insights](gcx_kg_insights.md)	 - Fetch chart data and source metrics for an active insight.
 
