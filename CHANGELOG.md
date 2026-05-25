@@ -1,3 +1,49 @@
+## v0.2.16 (2026-05-20)
+
+- Add `aio11y experiments` command group for managing evaluation experiments
+- Add `aio11y guards` subcommand for managing hook rules
+- Fix `kg insights` chart and sources request/response schemas
+- Fix `k6` token piping warning to reference the correct command
+- Centralize signal command wiring across metrics, logs, traces, and profiles
+- Consolidate error types into `internal/gcxerrors`, removing `fail` shims
+- Surface `diagnose-entity-graph` and document how skills get invoked
+- Mint Homebrew tap App token via broker in release workflow
+- Replace Dependabot with Renovate for dependency updates
+- Update Go module dependencies
+
+
+## v0.2.15 (2026-05-18)
+
+- **New**: `gcx instrumentation` command tree — clusters, services, setup, status
+- **New**: InfluxDB datasource provider
+- **New**: `gcx irm incidents contexts list` command
+- **New**: Knowledge Graph `diagnose` command
+- Profiles query: add `--profile-id` and `--stacktrace-selector` flags
+- Profiles query: add pprof output format
+- Profiles query: hint at `profile-types` command in `--profile-type` help
+- **Breaking**: rename `kg health` to `kg summary` with restructured output
+- **Breaking**: remove duplicate `kg scopes` command (use `kg entities scopes`)
+- **Breaking**: remove UI-centric `kg insights` query/summary/graph commands
+- **Breaking**: move `cypher` under `kg entities cypher`
+- **Breaking**: unify insight filtering under `kg entities list --insight`
+- Surface propagated assertions in `kg entities list`
+- Add insight filter flags to `kg entities inspect`
+- Improve `kg entities` help text and surface scope props in schema
+- Fix `kg insights search` endpoint to `/v1/assertions/search`
+- Fix `config use-context` to write to the right file when a local `.gcx.yaml` is loaded
+- Fix `login` to derive context name from `--server` when no name is given
+- Fix datasource kind normalization to recognize Prometheus flavor plugins
+- Eliminate redundant datasource GET after auto-discovery
+- Include valid values in enum-shaped error messages
+- Remove superseded `gcx setup instrumentation` subtree
+- Refactor pyroscope query to use Options pattern
+- Docs: document `--time` flag for instant queries on `explore-datasources`
+- Docs: add manifest examples to `gcx irm incidents create`
+- Docs: move mounting docs to public documentation; fix broken anchor
+- Add CODEOWNERS with product team co-ownership
+- Add docs sync to the website repo on merge to main
+
+
 ## v0.2.14 (2026-05-08)
 
 - **New**: Instrumentation Hub provider package with full CRUD, RMW, and
@@ -20,6 +66,7 @@
 - Login now suggests running `config check` after successful login
 - Fix IRM incident URL template to use correct OnCall plugin slug
 - Dev import: register v1 converters for Folder and Dashboard resources
+- `--json list` field discovery now returns all nested paths recursively (previously limited to top-level + one level of `spec.*`). Users relying on `gcx resources get --json list` or `gcx resources schemas --json list` will see a larger field set.
 
 
 ## v0.2.13 (2026-05-06)

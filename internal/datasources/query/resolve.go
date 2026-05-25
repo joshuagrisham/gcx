@@ -153,10 +153,14 @@ func ResolveTypedArgs(args []string, defaultUID string, kind string) (string, st
 // If the plugin ID is not recognized, it is returned as-is.
 func NormalizeKind(pluginID string) string {
 	switch pluginID {
-	case "prometheus", "loki", "tempo":
+	case "prometheus", "loki", "tempo", "influxdb":
 		return pluginID
 	case "grafana-pyroscope-datasource":
 		return "pyroscope"
+	case "grafana-clickhouse-datasource":
+		return "clickhouse"
+	case "yesoreyeram-infinity-datasource":
+		return "infinity"
 	default:
 		if isPromFlavor(pluginID) {
 			return "prometheus"

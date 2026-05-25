@@ -551,7 +551,7 @@ return opts.IO.Encode(cmd.OutOrStdout(), objs)
 
 | Category | Examples | Rationale |
 |----------|----------|-----------|
-| Query/search results | `insights search`, `entities list` | Time-series and aggregation results, not storable resources |
+| Query/search results | `entities list`, `assertions search` | Time-series and aggregation results, not storable resources |
 | Operational views | `status`, `health`, `inspect` | Composite or derived data, not individual resources |
 | Read-only reference data | `kg meta scopes` | Discoverable metadata, not user-managed resources |
 | Singleton config | `env get` | Single config objects, not collections of resources |
@@ -609,7 +609,7 @@ eliminates per-type boilerplate while keeping each registration self-documenting
 - Special-case type conversions (e.g., Shift→ShiftRequest) are closures in the option, not if/else branches
 
 **Evidence:**
-- `internal/providers/oncall/resource_adapter.go`: `registerOnCallResource[T]`, 17 registrations
+- `internal/providers/irm/oncall_adapter.go`: `registerOnCallResource[T]`, 17 registrations
 - ADR: `docs/adrs/oncall-typed-crud/001-table-driven-typedcrud.md`
 
 ### 19. Singleton Adapter Pattern (Adopt)

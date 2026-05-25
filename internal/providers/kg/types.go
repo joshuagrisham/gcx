@@ -81,31 +81,6 @@ type SearchRequest struct {
 	PageNum        int               `json:"pageNum" yaml:"pageNum"`
 }
 
-// LabelMatcher is one filter within an InsightSearchCriteria group. The backend
-// matches on assertion-rule labels such as asserts_assertion_name and
-// asserts_severity. Op uses MatcherOp values: "=", "<>", "CONTAINS",
-// "STARTS WITH", "ENDS WITH", "IS NULL", "IS NOT NULL", "<", ">", "<=", ">=",
-// "IN".
-type LabelMatcher struct {
-	Name  string `json:"name" yaml:"name"`
-	Op    string `json:"op" yaml:"op"`
-	Value string `json:"value" yaml:"value"`
-}
-
-// InsightSearchCriteria is one rule group. Label matchers within a group are
-// ANDed; multiple groups in an InsightSearchRequest are ORed.
-type InsightSearchCriteria struct {
-	LabelMatchers []LabelMatcher `json:"labelMatchers" yaml:"labelMatchers"`
-}
-
-// InsightSearchRequest is the request body for POST /v1/assertions/search.
-type InsightSearchRequest struct {
-	EntityType     string                  `json:"entityType" yaml:"entityType"`
-	SearchCriteria []InsightSearchCriteria `json:"searchCriteria" yaml:"searchCriteria"`
-	ScopeCriteria  *ScopeCriteria          `json:"scopeCriteria,omitempty" yaml:"scopeCriteria,omitempty"`
-	TimeCriteria   *TimeCriteria           `json:"timeCriteria,omitempty" yaml:"timeCriteria,omitempty"`
-}
-
 // SampleSearchRequest is the request body for POST /v1/search/sample.
 type SampleSearchRequest struct {
 	TimeCriteria   *TimeCriteria   `json:"timeCriteria,omitempty" yaml:"timeCriteria,omitempty"`
@@ -200,17 +175,29 @@ type EntityMetricResponse struct {
 }
 
 // SourceMetricsRequest is the request body for POST /v1/assertion/source-metrics.
+// Labels selects the assertion to fetch source metrics for and typically contains
+// at minimum "alertname" (the insight ID), "asserts_entity_type" and
+// "asserts_entity_name", plus any scope labels (env/namespace/site).
 type SourceMetricsRequest struct {
-	AssertionID string `json:"assertionId" yaml:"assertionId"`
-	StartTime   int64  `json:"startTime" yaml:"startTime"`
-	EndTime     int64  `json:"endTime" yaml:"endTime"`
+	StartTime int64             `json:"startTime" yaml:"startTime"`
+	EndTime   int64             `json:"endTime" yaml:"endTime"`
+	Labels    map[string]string `json:"labels" yaml:"labels"`
 }
 
-// SourceMetricsResponse is the response from POST /v1/assertion/source-metrics.
+// SourceMetricMatcher is a single PromQL label matcher returned by the
+// source-metrics endpoint (e.g. {label:"job", op:"=", value:"asserts/model-builder"}).
+type SourceMetricMatcher struct {
+	Label string `json:"label"`
+	Op    string `json:"op"`
+	Value string `json:"value"`
+}
+
+// SourceMetricsResponse is one entry from POST /v1/assertion/source-metrics:
+// the metric name and the label matchers that together identify the underlying
+// PromQL series sourcing the assertion.
 type SourceMetricsResponse struct {
-	PromQLQuery   string            `json:"promqlQuery"`
-	Labels        map[string]string `json:"labels,omitempty"`
-	DataSourceUID string            `json:"dataSourceUid,omitempty"`
+	MetricName string                `json:"metricName"`
+	Labels     []SourceMetricMatcher `json:"labels"`
 }
 
 // GetResourceName returns the composite "Type--Name" identity for the entity.
@@ -239,16 +226,32 @@ func (r Rule) GetResourceName() string { return r.Name }
 // SetResourceName restores the rule name.
 func (r *Rule) SetResourceName(name string) { r.Name = name }
 
-// Rule represents a Knowledge Graph prom rule.
+// Rule represents a Knowledge Graph prom rule (matches
+// PrometheusRulesDto on the backend). A rule is a named container of
+// rule groups, each holding alert and/or recording rules.
 //
 //nolint:recvcheck // Mixed receivers are intentional for Go generics TypedCRUD compatibility.
 type Rule struct {
-	Name        string            `json:"name"`
-	Expr        string            `json:"expr,omitempty"`
-	Record      string            `json:"record,omitempty"`
-	Alert       string            `json:"alert,omitempty"`
-	Labels      map[string]string `json:"labels,omitempty"`
-	Annotations map[string]string `json:"annotations,omitempty"`
+	Name   string      `json:"name"`
+	Groups []RuleGroup `json:"groups,omitempty"`
+}
+
+// RuleGroup is a group of related Prometheus rules within a Rule file.
+type RuleGroup struct {
+	Name     string     `json:"name"`
+	Interval string     `json:"interval,omitempty"`
+	Rules    []PromRule `json:"rules,omitempty"`
+}
+
+// PromRule is a single alert or recording rule within a RuleGroup.
+type PromRule struct {
+	Record          string            `json:"record,omitempty"`
+	Alert           string            `json:"alert,omitempty"`
+	Expr            string            `json:"expr,omitempty"`
+	Duration        string            `json:"for,omitempty"`
+	Annotations     map[string]string `json:"annotations,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty"`
+	DisableInGroups []string          `json:"disableInGroups,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
