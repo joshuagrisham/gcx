@@ -48,7 +48,6 @@ type loginOpts struct {
 	Yes                 bool
 	AllowServerOverride bool
 	OAuthCallbackPort   int
-	OnPremCallbackPort  int
 	OrgID               int
 }
 
@@ -69,7 +68,6 @@ func (opts *loginOpts) setup(flags *pflag.FlagSet) {
 	flags.BoolVar(&opts.Yes, "yes", false, "Non-interactive: skip optional prompts and use defaults")
 	flags.BoolVar(&opts.AllowServerOverride, "allow-server-override", false, "Allow re-pointing an existing context at a different server URL")
 	flags.IntVar(&opts.OAuthCallbackPort, "oauth-callback-port", 0, "Fixed local port for the OAuth callback server (default: auto-pick from 54321-54399). Useful when only specific ports are forwarded between a remote host and your browser")
-	flags.IntVar(&opts.OnPremCallbackPort, "on-prem-callback-port", 0, "Fixed local port for the on-prem OAuth callback server (default: auto-pick from 54401-54499)")
 	flags.IntVar(&opts.OrgID, "org-id", 0, "Grafana organization ID (defaults to 1 for on-prem)")
 }
 
@@ -201,17 +199,16 @@ func runLogin(cmd *cobra.Command, flags *loginOpts, args []string) error {
 
 	opts := login.Options{
 		Inputs: login.Inputs{
-			Server:             flags.Server,
-			ContextName:        contextName,
-			GrafanaToken:       flags.Token,
-			CloudToken:         flags.CloudToken,
-			CloudAPIURL:        flags.CloudAPIURL,
-			OAuthCallbackPort:  flags.OAuthCallbackPort,
-			OnPremCallbackPort: flags.OnPremCallbackPort,
-			Yes:                flags.Yes,
-			OrgID:              flags.OrgID,
-			Writer:             cmd.ErrOrStderr(),
-			TLS:                existingTLS,
+			Server:            flags.Server,
+			ContextName:       contextName,
+			GrafanaToken:      flags.Token,
+			CloudToken:        flags.CloudToken,
+			CloudAPIURL:       flags.CloudAPIURL,
+			OAuthCallbackPort: flags.OAuthCallbackPort,
+			Yes:               flags.Yes,
+			OrgID:             flags.OrgID,
+			Writer:            cmd.ErrOrStderr(),
+			TLS:               existingTLS,
 		},
 		Hooks: login.Hooks{
 			ConfigSource: flags.Config.ConfigSource(),
@@ -371,8 +368,8 @@ func askForInput(e *login.ErrNeedInput, opts *login.Options, sourceCtx *config.C
 // the token prompt allows empty input to reuse the stored token.
 //
 // The auth-method menu is tailored to the resolved target:
-//   - On-prem: OAuth is not offered (the Grafana instance cannot issue the
-//     tokens our OAuth flow relies on). The token prompt is shown directly.
+//   - On-prem: mTLS is offered first if available, followed by OAuth, with
+//     token as the fallback.
 //   - Cloud: OAuth is offered first as the recommended path, with token as
 //     the fallback.
 //   - Unknown (target still ambiguous): both options are offered, token
@@ -388,7 +385,7 @@ func askGrafanaAuth(opts *login.Options, existingToken string) error {
 	}
 
 	tokenOption := huh.NewOption("Service account token (requires permissions for managing service accounts)", "token")
-	oauthOption := huh.NewOption("OAuth (browser) — sign in through your browser; on-prem requires the grafana-on-prem-auth-app plugin installed by an admin", "oauth")
+	oauthOption := huh.NewOption("OAuth (browser) — recommended for cloud stacks; experimental on some configurations, fall back to a service account token if you hit issues", "oauth")
 	mtlsOption := huh.NewOption("Client certificate (mTLS) — authenticate via TLS client cert (e.g. Teleport)", "mtls")
 
 	var options []huh.Option[string]

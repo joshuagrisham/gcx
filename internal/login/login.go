@@ -41,12 +41,7 @@ type Inputs struct {
 	// Zero means auto-pick from the default range. Useful when only specific
 	// ports are forwarded between a remote dev host and the user's browser.
 	OAuthCallbackPort int
-
-	// OnPremCallbackPort fixes the local port for the on-prem auth callback
-	// server (default range: 54401-54499). See OAuthCallbackPort for rationale.
-	OnPremCallbackPort int
-
-	Yes bool
+	Yes               bool
 	// UseCloudInstanceSelector is only used internally to mark the case in which
 	// a user explicitly left the server empty to be directed to the cloud
 	// instance selector
@@ -75,9 +70,9 @@ type Hooks struct {
 	// written to. Nil falls back to config.StandardLocation().
 	ConfigSource config.Source
 
-	// NewAuthFlow constructs the OAuth PKCE flow (cloud). Must be non-nil
-	// when UseOAuth is true and the target is cloud; otherwise Run returns
-	// an error. Callers typically pass a factory that wraps auth.NewFlow.
+	// NewAuthFlow constructs the OAuth PKCE flow. Must be non-nil when
+	// UseOAuth is true; otherwise Run returns an error. Callers typically
+	// pass a factory that wraps auth.NewFlow.
 	NewAuthFlow func(server string, opts auth.Options) AuthFlow
 
 	// NewOnPremAuthFlow constructs the on-prem browser auth flow. Must be
@@ -417,18 +412,17 @@ func resolveGrafanaAuth(ctx context.Context, opts Options, target Target) (strin
 		}
 
 		// UseOAuth means "browser login". The concrete flow depends on the
-		// resolved target: Cloud uses the assistant-app cloud OAuth,
-		// on-prem uses grafana-on-prem-auth-app.
+		// resolved target: Cloud uses the grafana-assistant-app plugin app,
+		// on-prem uses the joshuagrisham-gcxonpremoauth-app plugin app.
 		if target == TargetOnPrem || target == TargetUnknown {
-			// On-prem browser flow (SA token via grafana-on-prem-auth-app).
+			// On-prem browser flow (SA token via joshuagrisham-gcxonpremoauth-app).
 			if opts.NewOnPremAuthFlow == nil {
 				return "", nil, errors.New("on-prem OAuth requested but no auth flow factory provided")
 			}
 			flow := opts.NewOnPremAuthFlow(opts.Server, auth.OnPremFlowOptions{
-				Writer:        w,
-				Port:          opts.OnPremCallbackPort,
-				OrgID:         int64(opts.OrgID),
-				SkipTLSVerify: opts.TLS != nil && opts.TLS.Insecure,
+				Writer: w,
+				Port:   opts.OAuthCallbackPort,
+				OrgID:  int64(opts.OrgID),
 			})
 			result, err := flow.Run(ctx)
 			if err != nil {
