@@ -140,8 +140,6 @@ Token sources (for non-interactive use):
 
 	opts.setup(cmd.Flags())
 
-	cmd.AddCommand(tokenCommand())
-
 	return cmd
 }
 

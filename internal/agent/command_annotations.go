@@ -39,8 +39,7 @@ var commandAnnotations = map[string]annotation{
 	"gcx assistant investigations todos":     {Cost: "medium", Hint: "<id> -o json"},
 
 	// login
-	"gcx login":       {Cost: "small", Hint: "Non-interactive: gcx login <ctx> --yes --server <url> --token <grafana-sa-token> [--cloud-token <cap-token>]. Service-account tokens (--token) are created inside the Grafana instance — see https://grafana.com/docs/grafana/latest/administration/service-accounts.md. Cloud access-policy tokens (--cloud-token) are created at grafana.com — see https://grafana.com/docs/grafana-cloud/security-and-account-management/authentication-and-permissions/access-policies/create-access-policies.md. Append .md to any grafana.com/docs URL to fetch markdown. Do not guess token URLs."},
-	"gcx login token": {Cost: "small", Hint: "Once a login has been established, this command can be used for piping the Grafana API token to other commands. Example: `gcx login token | xargs -I {} curl -H \"Authorization: Bearer {}\" https://my-grafana-instance/api/user`"},
+	"gcx login": {Cost: "small", Hint: "Non-interactive: gcx login <ctx> --yes --server <url> --token <grafana-sa-token> [--cloud-token <cap-token>]. Service-account tokens (--token) are created inside the Grafana instance — see https://grafana.com/docs/grafana/latest/administration/service-accounts.md. Cloud access-policy tokens (--cloud-token) are created at grafana.com — see https://grafana.com/docs/grafana-cloud/security-and-account-management/authentication-and-permissions/access-policies/create-access-policies.md. Append .md to any grafana.com/docs URL to fetch markdown. Do not guess token URLs."},
 
 	// commands
 	"gcx commands": {Cost: "medium", Hint: "--flat -o json"},
