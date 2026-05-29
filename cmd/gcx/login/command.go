@@ -205,6 +205,9 @@ func runLogin(cmd *cobra.Command, flags *loginOpts, args []string) error {
 			NewAuthFlow: func(server string, ao internalauth.Options) login.AuthFlow {
 				return internalauth.NewFlow(server, ao)
 			},
+			NewOnPremAuthFlow: func(server string, ao internalauth.OnPremFlowOptions) login.OnPremAuthFlow {
+				return internalauth.NewOnPremFlow(server, ao)
+			},
 		},
 		RetryState: login.RetryState{
 			StagedContext: &config.Context{}, // enables Run() to cache across sentinel retries
@@ -355,8 +358,8 @@ func askForInput(e *login.ErrNeedInput, opts *login.Options, sourceCtx *config.C
 // the token prompt allows empty input to reuse the stored token.
 //
 // The auth-method menu is tailored to the resolved target:
-//   - On-prem: OAuth is not offered (the Grafana instance cannot issue the
-//     tokens our OAuth flow relies on). The token prompt is shown directly.
+//   - On-prem: mTLS is offered first if available, followed by OAuth, with
+//     token as the fallback.
 //   - Cloud: OAuth is offered first as the recommended path, with token as
 //     the fallback.
 //   - Unknown (target still ambiguous): both options are offered, token
@@ -379,23 +382,23 @@ func askGrafanaAuth(opts *login.Options, existingToken string) error {
 	switch opts.Target {
 	case login.TargetOnPrem:
 		if hasMTLS {
-			options = []huh.Option[string]{mtlsOption, tokenOption}
+			options = []huh.Option[string]{mtlsOption, oauthOption, tokenOption}
 		} else {
-			options = []huh.Option[string]{tokenOption}
+			options = []huh.Option[string]{oauthOption, tokenOption}
 		}
 	case login.TargetCloud:
 		options = []huh.Option[string]{oauthOption, tokenOption}
 	default: // TargetUnknown
 		if hasMTLS {
-			options = []huh.Option[string]{mtlsOption, tokenOption, oauthOption}
+			options = []huh.Option[string]{mtlsOption, oauthOption, tokenOption}
 		} else {
-			options = []huh.Option[string]{tokenOption, oauthOption}
+			options = []huh.Option[string]{oauthOption, tokenOption}
 		}
 	}
 
 	// Default to the first option in the menu. For Cloud targets, mTLS is not
 	// offered so we must not default to it even when TLS certs are present.
-	authMethod := "token"
+	authMethod := "oauth"
 	if hasMTLS && opts.Target != login.TargetCloud {
 		authMethod = "mtls"
 	}

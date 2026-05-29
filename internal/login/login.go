@@ -75,6 +75,12 @@ type Hooks struct {
 	// pass a factory that wraps auth.NewFlow.
 	NewAuthFlow func(server string, opts auth.Options) AuthFlow
 
+	// NewOnPremAuthFlow constructs the on-prem browser auth flow. Must be
+	// non-nil when UseOAuth is true and the target is on-prem; otherwise
+	// Run returns an error. Callers typically pass a factory that wraps
+	// auth.NewOnPremFlow.
+	NewOnPremAuthFlow func(server string, opts auth.OnPremFlowOptions) OnPremAuthFlow
+
 	// ValidateFn overrides connectivity validation for testing.
 	// Returns the Grafana version string on success. When nil, the real
 	// Validate() is used.
@@ -178,6 +184,14 @@ func (e *ErrNeedClarification) Error() string {
 // It exists so internal/login can reference the flow without importing a
 // concrete browser-dependent type, and without depending on cmd/.
 type AuthFlow interface {
+	Run(ctx context.Context) (*auth.Result, error)
+}
+
+// OnPremAuthFlow is the interface implemented by auth.OnPremFlow (and test
+// stubs). It mirrors AuthFlow but returns the on-prem flow result, which
+// carries a service-account token (stored as APIToken) plus user/org
+// metadata rather than a cloud OAuth bearer.
+type OnPremAuthFlow interface {
 	Run(ctx context.Context) (*auth.Result, error)
 }
 
@@ -387,9 +401,6 @@ func resolveGrafanaAuth(ctx context.Context, opts Options, target Target) (strin
 		method = "mtls"
 
 	case opts.UseOAuth:
-		if opts.NewAuthFlow == nil {
-			return "", nil, errors.New("OAuth requested but no auth flow factory provided")
-		}
 		// The internal/login package is UI-free (NC-001) — it never touches
 		// process streams directly. Callers that want OAuth output surfaced
 		// to the user must supply a Writer explicitly (the CLI passes
@@ -399,20 +410,46 @@ func resolveGrafanaAuth(ctx context.Context, opts Options, target Target) (strin
 		if w == nil {
 			w = io.Discard
 		}
-		flow := opts.NewAuthFlow(opts.Server, auth.Options{Writer: w, Port: opts.OAuthCallbackPort})
-		result, err := flow.Run(ctx)
-		if err != nil {
-			return "", nil, fmt.Errorf("OAuth flow failed: %w", err)
+
+		// UseOAuth means "browser login". The concrete flow depends on the
+		// resolved target: Cloud uses the grafana-assistant-app plugin app,
+		// on-prem uses the joshuagrisham-gcxonpremoauth-app plugin app.
+		if target == TargetOnPrem || target == TargetUnknown {
+			// On-prem browser flow (SA token via joshuagrisham-gcxonpremoauth-app).
+			if opts.NewOnPremAuthFlow == nil {
+				return "", nil, errors.New("on-prem OAuth requested but no auth flow factory provided")
+			}
+			flow := opts.NewOnPremAuthFlow(opts.Server, auth.OnPremFlowOptions{
+				Writer: w,
+				Port:   opts.OAuthCallbackPort,
+				OrgID:  int64(opts.OrgID),
+			})
+			result, err := flow.Run(ctx)
+			if err != nil {
+				return "", nil, fmt.Errorf("on-prem OAuth flow failed: %w", err)
+			}
+			grafanaCfg.APIToken = result.Token
+			grafanaCfg.AuthMethod = "oauth"
+		} else {
+			// Cloud OAuth flow (gat_ bearer via assistant-app).
+			if opts.NewAuthFlow == nil {
+				return "", nil, errors.New("OAuth requested but no auth flow factory provided")
+			}
+			flow := opts.NewAuthFlow(opts.Server, auth.Options{Writer: w, Port: opts.OAuthCallbackPort})
+			result, err := flow.Run(ctx)
+			if err != nil {
+				return "", nil, fmt.Errorf("OAuth flow failed: %w", err)
+			}
+			if grafanaCfg.Server == "" {
+				grafanaCfg.Server = result.InstanceEndpoint
+			}
+			grafanaCfg.OAuthToken = result.Token
+			grafanaCfg.OAuthRefreshToken = result.RefreshToken
+			grafanaCfg.OAuthTokenExpiresAt = result.ExpiresAt
+			grafanaCfg.OAuthRefreshExpiresAt = result.RefreshExpiresAt
+			grafanaCfg.ProxyEndpoint = result.APIEndpoint
+			grafanaCfg.AuthMethod = "oauth"
 		}
-		if grafanaCfg.Server == "" {
-			grafanaCfg.Server = result.InstanceEndpoint
-		}
-		grafanaCfg.OAuthToken = result.Token
-		grafanaCfg.OAuthRefreshToken = result.RefreshToken
-		grafanaCfg.OAuthTokenExpiresAt = result.ExpiresAt
-		grafanaCfg.OAuthRefreshExpiresAt = result.RefreshExpiresAt
-		grafanaCfg.ProxyEndpoint = result.APIEndpoint
-		grafanaCfg.AuthMethod = "oauth"
 		method = "oauth"
 
 	default:
